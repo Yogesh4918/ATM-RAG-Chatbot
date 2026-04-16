@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart ATM — Multilingual Voice Chatbot</title>
+    <meta name="description" content="RAG-powered multilingual voice ATM chatbot supporting 7 Indian languages">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏧</text></svg>">
+</head>
+<body>
+
+<!-- ═══════════ Background Mesh ═══════════ -->
+<div class="bg-mesh"></div>
+
+<!-- ═══════════ Main Layout ═══════════ -->
+<div class="app-container">
+
+    <!-- ─── Sidebar ─── -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo-icon">🏧</div>
+            <h2 class="logo-text">Smart ATM</h2>
+            <p class="logo-sub">Voice-Enabled Banking</p>
+        </div>
+
+        <div class="neon-divider"></div>
+
+        <!-- Language Selection -->
+        <div class="sidebar-section">
+            <h3>🌐 <span id="langLabel">Select Language</span></h3>
+            <select id="languageSelect" class="glass-select">
+                <option value="English">🇬🇧 English</option>
+                <option value="Hindi">🇮🇳 हिन्दी (Hindi)</option>
+                <option value="Gujarati">🇮🇳 ગુજરાતી (Gujarati)</option>
+                <option value="Marathi">🇮🇳 मराठी (Marathi)</option>
+                <option value="Tamil">🇮🇳 தமிழ் (Tamil)</option>
+                <option value="Telugu">🇮🇳 తెలుగు (Telugu)</option>
+                <option value="Bengali">🇮🇳 বাংলা (Bengali)</option>
+            </select>
+        </div>
+
+        <div class="neon-divider"></div>
+
+        <!-- Session Status -->
+        <div class="sidebar-section">
+            <h3>📊 Session Status</h3>
+            <div class="status-row" id="cardStatus">
+                <span class="status-dot inactive"></span>
+                <span>No Card</span>
+            </div>
+            <div class="status-row" id="authStatus" style="display:none;">
+                <span class="status-dot active"></span>
+                <span>Authenticated</span>
+            </div>
+        </div>
+
+        <!-- Account Info (shown when authenticated) -->
+        <div id="accountInfo" class="glass-card account-card" style="display:none;">
+            <div class="info-label" id="cardNumLabel">Card Number</div>
+            <div class="info-value mono" id="cardNum">XXXX-XXXX-XXXX-1234</div>
+            <div class="info-label" id="balLabel">Available Balance</div>
+            <div class="info-value balance-display" id="balDisplay">₹25,000</div>
+        </div>
+
+        <div class="neon-divider"></div>
+
+        <!-- Quick Actions -->
+        <div class="sidebar-section" id="quickActionsSection" style="display:none;">
+            <h3>⚡ <span id="qaLabel">Quick Actions</span></h3>
+            <button class="quick-btn" onclick="quickAction('withdraw')">💵 <span id="qWithdraw">Withdraw</span></button>
+            <button class="quick-btn" onclick="quickAction('balance')">💰 <span id="qBalance">Balance</span></button>
+            <button class="quick-btn" onclick="quickAction('mini_statement')">📋 <span id="qStatement">Statement</span></button>
+            <button class="quick-btn" onclick="quickAction('help')">❓ <span id="qHelp">Help</span></button>
+        </div>
+
+        <!-- End Session -->
+        <button class="end-session-btn" id="endSessionBtn" style="display:none;" onclick="endSession()">
+            🚪 <span id="exitLabel">End Session</span>
+        </button>
+
+        <!-- Security Note -->
+        <div class="security-note">
+            🔒 <span id="pinSecNote">PIN can only be entered via keypad</span>
+        </div>
+
+        <!-- Demo PIN -->
+        <div class="demo-pin-card">
+            <div class="demo-label">🔑 Demo PIN</div>
+            <div class="demo-value">PIN: <strong>1234</strong></div>
+        </div>
+
+        <!-- Mobile Toggle -->
+        <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">☰</button>
+    </aside>
+
+    <!-- ─── Main Content ─── -->
+    <main class="main-content">
+
+        <!-- ATM Header -->
+        <header class="atm-header">
+            <div class="header-bg"></div>
+            <h1>🏧 Smart ATM</h1>
+            <p>RAG-Powered Multilingual Voice Assistant</p>
+        </header>
+
+        <!-- ═══ Card Insert Screen ═══ -->
+        <div id="cardInsertScreen" class="screen active">
+            <div class="card-slot" onclick="insertCard()">
+                <div class="card-icon">💳</div>
+                <h3 id="insertCardTitle">Insert Card</h3>
+                <p>Tap here to start your session</p>
+                <button class="primary-btn pulse-btn" onclick="insertCard()" id="insertCardBtn">
+                    💳 <span>Insert Card</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ═══ Chat Screen ═══ -->
+        <div id="chatScreen" class="screen">
+            <!-- Chat Messages -->
+            <div class="chat-container" id="chatContainer">
+                <div class="chat-empty" id="chatEmpty">
+                    <div class="empty-icon">💬</div>
+                    <p id="emptyMsg">Ask me anything about ATM services!</p>
+                </div>
+            </div>
+
+            <!-- Receipt Area -->
+            <div id="receiptArea"></div>
+            <!-- Mini Statement Area -->
+            <div id="statementArea"></div>
+
+            <div class="neon-divider"></div>
+
+            <!-- Input Area -->
+            <div class="input-area" id="inputArea">
+                <!-- Input Tabs -->
+                <div class="input-tabs">
+                    <button class="tab-btn active" onclick="switchTab('voice')" id="voiceTab">🎤 <span id="voiceLabel">Voice</span></button>
+                    <button class="tab-btn" onclick="switchTab('text')" id="textTab">⌨️ <span id="textLabel">Text</span></button>
+                </div>
+
+                <!-- Voice Input -->
+                <div class="tab-content active" id="voiceContent">
+                    <div class="voice-area">
+                        <button class="mic-btn" id="micBtn" onclick="toggleVoice()">
+                            <span class="mic-icon">🎙️</span>
+                            <span class="mic-pulse"></span>
+                        </button>
+                        <p class="mic-label" id="micLabel">Press to Speak</p>
+                    </div>
+                </div>
+
+                <!-- Text Input -->
+                <div class="tab-content" id="textContent">
+                    <form class="text-input-form" onsubmit="sendText(event)">
+                        <input type="text" class="chat-input" id="chatInput" placeholder="Type your message..." autocomplete="off">
+                        <button type="submit" class="send-btn">➤</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Amount Input (hidden by default) -->
+            <div class="amount-area" id="amountArea" style="display:none;">
+                <div class="amount-card">
+                    <h3 id="amountTitle">Enter Amount</h3>
+                    <div class="amount-input-group">
+                        <span class="currency-prefix">₹</span>
+                        <input type="number" id="amountInput" class="amount-input" min="100" max="10000" step="100" value="500">
+                    </div>
+                    <div class="amount-presets">
+                        <button class="preset-btn" onclick="setAmount(500)">₹500</button>
+                        <button class="preset-btn" onclick="setAmount(1000)">₹1,000</button>
+                        <button class="preset-btn" onclick="setAmount(2000)">₹2,000</button>
+                        <button class="preset-btn" onclick="setAmount(5000)">₹5,000</button>
+                    </div>
+                    <button class="primary-btn" onclick="confirmWithdraw()" id="confirmWithdrawBtn">💵 Withdraw</button>
+                    <button class="ghost-btn" onclick="cancelAmount()">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ PIN Modal ═══ -->
+        <div class="modal-overlay" id="pinModal" style="display:none;">
+            <div class="pin-keypad">
+                <h3 id="pinTitle">🔐 Enter PIN</h3>
+                <p class="pin-subtitle" id="pinSubtitle">Enter your 4-digit PIN</p>
+                <div class="pin-display" id="pinDisplay">○ ○ ○ ○</div>
+                <div class="pin-error" id="pinError"></div>
+                <div class="keypad-grid">
+                    <button class="key-btn" onclick="pinKey('1')">1</button>
+                    <button class="key-btn" onclick="pinKey('2')">2</button>
+                    <button class="key-btn" onclick="pinKey('3')">3</button>
+                    <button class="key-btn" onclick="pinKey('4')">4</button>
+                    <button class="key-btn" onclick="pinKey('5')">5</button>
+                    <button class="key-btn" onclick="pinKey('6')">6</button>
+                    <button class="key-btn" onclick="pinKey('7')">7</button>
+                    <button class="key-btn" onclick="pinKey('8')">8</button>
+                    <button class="key-btn" onclick="pinKey('9')">9</button>
+                    <button class="key-btn key-clear" onclick="pinClear()">⌫</button>
+                    <button class="key-btn" onclick="pinKey('0')">0</button>
+                    <button class="key-btn key-submit" onclick="pinSubmit()">✓</button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<!-- ── Audio element for TTS ── -->
+<audio id="ttsAudio" preload="none"></audio>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

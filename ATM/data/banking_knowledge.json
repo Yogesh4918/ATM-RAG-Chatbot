@@ -1,0 +1,247 @@
+[
+  {
+    "category": "withdrawal_limits",
+    "question": "What is the maximum daily withdrawal limit from an ATM?",
+    "answer": "The maximum daily withdrawal limit from most ATMs in India is ₹20,000 for regular savings accounts. However, some premium accounts may allow up to ₹50,000 per day. The per-transaction limit is typically ₹10,000."
+  },
+  {
+    "category": "withdrawal_limits",
+    "question": "How many times can I withdraw from ATM in a day?",
+    "answer": "Most banks allow 5 free ATM transactions per month at own bank ATMs and 3 free transactions at other bank ATMs. Beyond these free transactions, a fee of ₹20-21 plus GST is charged per transaction."
+  },
+  {
+    "category": "withdrawal_limits",
+    "question": "What denominations are available at ATMs?",
+    "answer": "Most ATMs in India dispense notes in denominations of ₹100, ₹200, ₹500, and ₹2000. The available denominations may vary by ATM. Some ATMs also offer ₹50 notes."
+  },
+  {
+    "category": "withdrawal_limits",
+    "question": "Can I withdraw money from any bank's ATM?",
+    "answer": "Yes, you can withdraw money from any bank's ATM in India. Your first 3-5 transactions per month at other bank ATMs are usually free. After that, charges of ₹20-21 plus GST apply per transaction."
+  },
+  {
+    "category": "balance_inquiry",
+    "question": "How do I check my account balance at an ATM?",
+    "answer": "Insert your debit card, enter your 4-digit PIN, select 'Balance Inquiry' from the menu, choose your account type (Savings/Current), and the balance will be displayed on screen. You can also request a printed slip."
+  },
+  {
+    "category": "balance_inquiry",
+    "question": "Is there a charge for balance inquiry at ATM?",
+    "answer": "Balance inquiry at your own bank's ATM is usually free. At other bank ATMs, it counts as a financial transaction towards your free monthly limit. Beyond the free limit, a charge of ₹5-10 may apply."
+  },
+  {
+    "category": "mini_statement",
+    "question": "What is a mini statement?",
+    "answer": "A mini statement shows the last 5-10 transactions on your account, including deposits, withdrawals, and transfers. It includes the date, type, and amount of each transaction along with the running balance."
+  },
+  {
+    "category": "mini_statement",
+    "question": "How many transactions are shown in a mini statement?",
+    "answer": "A mini statement typically shows the last 5 to 10 recent transactions depending on the bank. It includes the date, transaction type (credit/debit), amount, and available balance after each transaction."
+  },
+  {
+    "category": "pin_security",
+    "question": "What should I do if I forget my ATM PIN?",
+    "answer": "If you forget your ATM PIN, you can: 1) Generate a new PIN through your bank's internet banking or mobile app, 2) Visit your bank branch with an ID proof to reset your PIN, 3) Call your bank's customer care helpline to request a new PIN."
+  },
+  {
+    "category": "pin_security",
+    "question": "How many times can I enter wrong PIN?",
+    "answer": "You are allowed 3 consecutive incorrect PIN attempts. After 3 wrong attempts, your card will be temporarily blocked for 24 hours for security purposes. Contact your bank's customer care to unblock it earlier."
+  },
+  {
+    "category": "pin_security",
+    "question": "How to change ATM PIN?",
+    "answer": "You can change your ATM PIN at any ATM of your bank. Insert your card, enter current PIN, select 'PIN Change' from the menu, enter your new 4-digit PIN twice to confirm. You can also change it through internet banking or mobile banking apps."
+  },
+  {
+    "category": "pin_security",
+    "question": "Is my ATM PIN secure?",
+    "answer": "Your ATM PIN is encrypted and never stored in plain text. Always cover the keypad while entering your PIN, never share your PIN with anyone, and change it regularly. Banks will never ask for your PIN through any communication."
+  },
+  {
+    "category": "card_issues",
+    "question": "What if my card gets stuck in the ATM?",
+    "answer": "If your card gets stuck in the ATM: 1) Do not leave the ATM, 2) Call your bank's customer care immediately, 3) Note the ATM ID and location, 4) The bank will arrange retrieval within 7 working days, 5) If the card is swallowed, the ATM will automatically shred it for security."
+  },
+  {
+    "category": "card_issues",
+    "question": "What should I do if my ATM card is lost or stolen?",
+    "answer": "Immediately: 1) Call your bank's customer care to block the card, 2) Block via mobile banking app, 3) Send an SMS to your bank's designated number, 4) Visit your branch to apply for a replacement card. Most banks issue replacement cards within 7-10 working days."
+  },
+  {
+    "category": "card_issues",
+    "question": "My card expired. What should I do?",
+    "answer": "Banks usually send renewal cards 1-2 months before expiry. If you haven't received it: 1) Contact your bank branch, 2) Apply for a new card through net banking, 3) The new card is usually delivered within 7-10 working days."
+  },
+  {
+    "category": "charges_fees",
+    "question": "What are the charges for using ATM?",
+    "answer": "Free transactions per month: 5 at own bank ATM, 3 at other bank ATMs (in metros). Beyond free limit: ₹20-21 + 18% GST per financial transaction, ₹8-9 + GST per non-financial transaction. These limits are set by RBI guidelines."
+  },
+  {
+    "category": "charges_fees",
+    "question": "Are there extra charges for night-time ATM use?",
+    "answer": "No, there are no extra charges for using ATMs at night. ATM services are available 24/7 at the same rates. However, for safety reasons, some ATMs may restrict access during late night hours."
+  },
+  {
+    "category": "charges_fees",
+    "question": "What is the charge for failed ATM transaction?",
+    "answer": "Banks are not supposed to charge for failed transactions. If money is debited but not dispensed, the amount should be automatically reversed within 5 working days. If not, you can file a complaint with your bank."
+  },
+  {
+    "category": "failed_transaction",
+    "question": "Money debited but cash not received. What to do?",
+    "answer": "If money is debited but cash not dispensed: 1) Wait near the ATM for 2-3 minutes as the machine may auto-correct, 2) Note the ATM ID, date, time, and amount, 3) The amount should auto-reverse within 5 working days, 4) If not reversed, file a complaint with your bank, 5) You can also file a complaint on the bank's website or RBI's banking ombudsman portal."
+  },
+  {
+    "category": "failed_transaction",
+    "question": "How long does it take for a failed ATM transaction to be refunded?",
+    "answer": "As per RBI guidelines, if money was debited but cash not dispensed, the bank must reverse the amount within T+5 days (5 working days from the transaction date). If not reversed, the bank must pay ₹100 per day as compensation."
+  },
+  {
+    "category": "rbi_regulations",
+    "question": "What are the RBI guidelines for ATM transactions?",
+    "answer": "Key RBI ATM guidelines: 1) 5 free transactions at own bank ATMs per month, 2) 3 free transactions at other bank ATMs in metros (5 in non-metros), 3) Failed transaction refund within T+5 days, 4) ₹100/day compensation for delayed reversal, 5) Card blocking facility must be available 24/7."
+  },
+  {
+    "category": "rbi_regulations",
+    "question": "What is the minimum amount I can withdraw from ATM?",
+    "answer": "The minimum withdrawal amount at most ATMs is ₹100. Some ATMs allow withdrawal of ₹50 notes as well. The amount withdrawn must be in multiples of ₹100 (or ₹50 at ATMs that support it)."
+  },
+  {
+    "category": "account_types",
+    "question": "Can I use ATM for my current account?",
+    "answer": "Yes, you can use ATMs for both savings and current accounts. When performing a transaction, select the appropriate account type. Current account holders may have different withdrawal limits depending on their bank and account tier."
+  },
+  {
+    "category": "account_types",
+    "question": "Can I deposit cash at ATM?",
+    "answer": "Yes, many banks have Cash Deposit Machines (CDMs) or ATMs with deposit functionality. You can deposit cash in denominations of ₹100, ₹200, ₹500, and ₹2000. The deposited amount is usually credited within 1-2 working days."
+  },
+  {
+    "category": "safety_tips",
+    "question": "What are the safety tips for using ATM?",
+    "answer": "ATM Safety Tips: 1) Always cover the keypad when entering PIN, 2) Never share your PIN with anyone, 3) Check for card skimming devices, 4) Collect your card and receipt before leaving, 5) Avoid using ATMs in isolated areas at night, 6) Register for SMS alerts for all transactions, 7) Change your PIN regularly."
+  },
+  {
+    "category": "safety_tips",
+    "question": "How to check for card skimming at ATM?",
+    "answer": "To check for card skimmers: 1) Wiggle the card slot - skimmers are usually loose, 2) Check for unusual attachments or overlays on the keypad, 3) Look for tiny cameras near the keypad, 4) Use ATMs inside bank branches when possible, 5) Cover your hand while entering PIN, 6) If anything looks suspicious, do not use the ATM and contact the bank."
+  },
+  {
+    "category": "general_help",
+    "question": "What services are available at an ATM?",
+    "answer": "Common ATM services include: 1) Cash Withdrawal, 2) Balance Inquiry, 3) Mini Statement, 4) PIN Change, 5) Fund Transfer (NEFT/IMPS at some ATMs), 6) Cash Deposit (at CDMs), 7) Cheque Deposit (selected ATMs), 8) Mobile Recharge (some banks), 9) Aadhaar-linked transactions."
+  },
+  {
+    "category": "general_help",
+    "question": "Can I use UPI at ATM without card?",
+    "answer": "Yes, some modern ATMs support cardless cash withdrawal using UPI. You can initiate a cardless withdrawal request through your bank's mobile app, receive a code, and use that code at the ATM to withdraw cash without inserting a card."
+  },
+  {
+    "category": "general_help",
+    "question": "What is Aadhaar-linked ATM transaction?",
+    "answer": "Some ATMs support Aadhaar-enabled payment system (AePS) which allows basic banking transactions using Aadhaar number and biometric authentication instead of a debit card. Services include cash withdrawal, balance inquiry, and mini statement."
+  },
+  {
+    "category": "general_help",
+    "question": "How do I find the nearest ATM?",
+    "answer": "You can find the nearest ATM by: 1) Using your bank's mobile app which has an ATM locator feature, 2) Google Maps - search 'ATM near me', 3) Bank's website ATM locator, 4) Calling your bank's customer care helpline, 5) RBI's ATM locator on their website."
+  },
+  {
+    "category": "international",
+    "question": "Can I use my Indian ATM card abroad?",
+    "answer": "Yes, if your card has Visa/MasterCard/RuPay International logo, you can use it at ATMs abroad. However: 1) International usage must be enabled in your net banking, 2) Currency conversion charges apply (2-3.5%), 3) A flat fee of ₹125-250 per transaction may apply, 4) Daily international withdrawal limits may differ."
+  },
+  {
+    "category": "technology",
+    "question": "What is EMV chip card?",
+    "answer": "EMV chip cards have an embedded microprocessor chip that provides enhanced security compared to magnetic stripe cards. The chip generates a unique transaction code for each use, making it virtually impossible to counterfeit. All Indian banks now issue EMV chip cards as mandated by RBI."
+  },
+  {
+    "category": "technology",
+    "question": "Why does ATM sometimes show 'temporarily out of service'?",
+    "answer": "ATMs may show this message due to: 1) Cash exhausted in the machine, 2) Technical malfunction, 3) Network connectivity issues, 4) Scheduled maintenance, 5) Power failure. If you encounter this, try another nearby ATM or visit your bank branch."
+  },
+  {
+    "category": "senior_citizens",
+    "question": "Are there any special ATM facilities for senior citizens?",
+    "answer": "While ATMs don't have specific senior citizen modes, banks offer: 1) Larger font display on some ATMs, 2) Audio-guided ATMs for visually impaired users, 3) Lower withdrawal limits can be set for safety, 4) Priority banking services at branches. Some banks also offer doorstep banking for senior citizens."
+  },
+  {
+    "category": "complaints",
+    "question": "How to file a complaint about ATM issues?",
+    "answer": "To file an ATM complaint: 1) Call your bank's 24/7 customer care, 2) Visit the bank branch, 3) Use internet banking complaint portal, 4) Email the bank's grievance cell, 5) If unresolved within 30 days, escalate to the Banking Ombudsman through RBI's CMS portal at cms.rbi.org.in."
+  },
+  {
+    "category": "withdrawal_process",
+    "question": "What are the steps to withdraw cash from ATM?",
+    "answer": "Steps to withdraw cash: 1) Insert your debit card into the ATM, 2) Select your preferred language, 3) Enter your 4-digit PIN, 4) Select 'Cash Withdrawal' from the menu, 5) Choose your account type (Savings/Current), 6) Enter the amount, 7) Collect cash and receipt, 8) Remove your card."
+  },
+  {
+    "category": "withdrawal_process",
+    "question": "Can I withdraw specific denominations?",
+    "answer": "Most standard ATMs do not allow you to choose specific denominations - they dispense available notes automatically. However, some advanced ATMs (called recycler ATMs or multi-denomination ATMs) allow you to select preferred denominations of ₹100, ₹200, ₹500."
+  },
+  {
+    "category": "transfer",
+    "question": "Can I transfer money through ATM?",
+    "answer": "Yes, some ATMs support fund transfers. You can transfer money to accounts within the same bank. Some advanced ATMs also support NEFT/IMPS transfers to other bank accounts. You will need the beneficiary's account number and IFSC code."
+  },
+  {
+    "category": "transfer",
+    "question": "What is the maximum amount I can transfer through ATM?",
+    "answer": "The transfer limit through ATM varies by bank but is typically ₹10,000-₹25,000 per transaction. Daily limits may also apply. For larger transfers, use internet banking, mobile banking, or visit your bank branch."
+  },
+  {
+    "category": "accessibility",
+    "question": "Are ATMs accessible for differently-abled persons?",
+    "answer": "As per RBI mandate, banks must make ATMs accessible for differently-abled persons. Features include: 1) Ramp access for wheelchair users, 2) Braille keypad, 3) Audio guidance through headphone jack, 4) Screen readers, 5) Lowered height ATMs. However, implementation varies across locations."
+  },
+  {
+    "category": "fraud",
+    "question": "What to do if I suspect ATM fraud?",
+    "answer": "If you suspect fraud: 1) Immediately block your card by calling customer care, 2) Report the unauthorized transaction to your bank within 3 days, 3) File a police complaint (FIR), 4) As per RBI guidelines, if reported within 3 working days, your liability is limited to ₹0 for bank-side issues or ₹10,000-₹25,000 depending on the type of fraud."
+  },
+  {
+    "category": "deposit",
+    "question": "How does ATM cash deposit work?",
+    "answer": "To deposit cash at a CDM/ATM: 1) Insert your debit card and enter PIN, 2) Select 'Cash Deposit', 3) Choose your account type, 4) Place the cash notes in the deposit slot (facing same direction), 5) The machine counts and verifies the notes, 6) Confirm the amount, 7) Collect the receipt. Amount is usually credited within 24 hours."
+  },
+  {
+    "category": "cheque",
+    "question": "Can I deposit cheques at ATM?",
+    "answer": "Some ATMs have cheque deposit facilities. You can deposit cheques 24/7 by inserting them in the designated slot with a cheque deposit envelope. The cheque is processed during banking hours and typically takes 2-3 working days to clear."
+  },
+  {
+    "category": "mobile_recharge",
+    "question": "Can I recharge my mobile at ATM?",
+    "answer": "Some bank ATMs offer mobile recharge facility. You can recharge your prepaid mobile number or pay postpaid bills through the ATM menu. The amount is debited from your account. However, this feature is becoming less common as mobile banking apps are more convenient."
+  },
+  {
+    "category": "banking_hours",
+    "question": "Are ATMs available 24/7?",
+    "answer": "Yes, most ATMs operate 24 hours a day, 7 days a week, including holidays. However, some ATMs inside bank branches may only be accessible during branch hours. ATMs in malls or public places may follow the venue's operating hours."
+  },
+  {
+    "category": "receipt",
+    "question": "Should I keep my ATM receipt?",
+    "answer": "Yes, it's advisable to keep ATM receipts for at least 30 days as proof of transaction. Receipts are important for: 1) Verifying the transaction amount, 2) Dispute resolution, 3) Tracking your spending, 4) Tax documentation. Destroy old receipts by shredding to protect personal information."
+  },
+  {
+    "category": "contactless",
+    "question": "What is contactless card payment?",
+    "answer": "Contactless payment allows you to tap your card on a payment terminal for quick transactions without inserting or swiping. In India, contactless payments up to ₹5,000 may not require PIN entry. For amounts above ₹5,000, PIN is mandatory. Enable/disable this feature through your bank's app."
+  },
+  {
+    "category": "rural_banking",
+    "question": "Are there ATMs in rural areas?",
+    "answer": "RBI has mandated banks to expand ATM networks in rural and semi-urban areas. White Label ATMs (WLAs) operated by non-bank entities also serve rural areas. Additionally, the India Post Payment Bank operates ATMs and banking points in rural regions."
+  },
+  {
+    "category": "green_banking",
+    "question": "What is Green PIN for ATM?",
+    "answer": "Green PIN is an eco-friendly way to generate your ATM PIN without visiting a bank branch. You can generate your PIN through: 1) IVR (phone banking), 2) Internet banking, 3) Mobile banking app, 4) SMS. This eliminates the need for a physical PIN mailer letter."
+  }
+]
