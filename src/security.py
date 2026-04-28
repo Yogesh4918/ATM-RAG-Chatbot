@@ -1,149 +1,117 @@
 """
-Security Module — PIN validation, session management, and access control.
+Security Module — PIN validation, rate limiting, and access control.
 PIN is NEVER spoken, logged, or stored in plaintext.
+Framework-agnostic: works with any session backend (Flask, FastAPI, etc.).
 """
 
 import bcrypt
 import time
 import secrets
-import streamlit as st
+import logging
+from typing import Tuple
 
+logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────
 # Constants
 # ─────────────────────────────────────────────────────────────
-MAX_PIN_ATTEMPTS = 3
-LOCKOUT_DURATION = 30  # seconds
-SESSION_TIMEOUT = 120  # seconds (2 minutes)
-DEFAULT_PIN = "1234"   # Default PIN for simulation
+MAX_PIN_ATTEMPTS: int = 3
+LOCKOUT_DURATION: int = 30       # seconds
+SESSION_TIMEOUT: int = 120       # seconds (2 minutes)
+DEFAULT_PIN: str = "1234"        # Default PIN for simulation
+MAX_INPUT_LENGTH: int = 500      # Max characters for user text input
+MAX_PIN_LENGTH: int = 4
 
 
-def _get_pin_hash() -> bytes:
-    """Get the bcrypt hash of the default PIN. In production, this would come from a secure database."""
-    return bcrypt.hashpw(DEFAULT_PIN.encode("utf-8"), bcrypt.gensalt())
+def hash_pin(pin: str) -> bytes:
+    """Hash a PIN using bcrypt. Returns the bcrypt hash bytes."""
+    return bcrypt.hashpw(pin.encode("utf-8"), bcrypt.gensalt())
 
 
-def init_security_state():
-    """Initialize security-related session state variables."""
-    if "pin_hash" not in st.session_state:
-        st.session_state.pin_hash = _get_pin_hash()
-    if "pin_attempts" not in st.session_state:
-        st.session_state.pin_attempts = 0
-    if "pin_locked_until" not in st.session_state:
-        st.session_state.pin_locked_until = 0
-    if "pin_verified" not in st.session_state:
-        st.session_state.pin_verified = False
-    if "session_token" not in st.session_state:
-        st.session_state.session_token = None
-    if "last_activity" not in st.session_state:
-        st.session_state.last_activity = time.time()
-    if "card_inserted" not in st.session_state:
-        st.session_state.card_inserted = False
-
-
-def is_locked() -> bool:
-    """Check if PIN entry is currently locked out."""
-    if st.session_state.pin_locked_until > time.time():
-        return True
-    # Auto-unlock when lockout expires
-    if st.session_state.pin_locked_until > 0 and st.session_state.pin_locked_until <= time.time():
-        st.session_state.pin_locked_until = 0
-        st.session_state.pin_attempts = 0
-    return False
-
-
-def get_lockout_remaining() -> int:
-    """Get remaining lockout time in seconds."""
-    remaining = st.session_state.pin_locked_until - time.time()
-    return max(0, int(remaining))
-
-
-def validate_pin(entered_pin: str) -> bool:
+def verify_pin(entered_pin: str, pin_hash: bytes) -> bool:
     """
-    Validate the entered PIN against the stored hash.
+    Verify an entered PIN against a bcrypt hash.
     Returns True if correct, False otherwise.
     NEVER logs the PIN value.
     """
-    if is_locked():
+    if not entered_pin or len(entered_pin) != MAX_PIN_LENGTH or not entered_pin.isdigit():
         return False
-
-    # Validate PIN format (4 digits only)
-    if not entered_pin or len(entered_pin) != 4 or not entered_pin.isdigit():
-        return False
-
-    # Check PIN against bcrypt hash
-    is_correct = bcrypt.checkpw(
-        entered_pin.encode("utf-8"),
-        st.session_state.pin_hash
-    )
-
-    if is_correct:
-        st.session_state.pin_verified = True
-        st.session_state.pin_attempts = 0
-        st.session_state.session_token = secrets.token_hex(16)
-        st.session_state.last_activity = time.time()
-        return True
-    else:
-        st.session_state.pin_attempts += 1
-        if st.session_state.pin_attempts >= MAX_PIN_ATTEMPTS:
-            st.session_state.pin_locked_until = time.time() + LOCKOUT_DURATION
-        return False
+    return bcrypt.checkpw(entered_pin.encode("utf-8"), pin_hash)
 
 
-def get_attempts_remaining() -> int:
-    """Get the number of PIN attempts remaining."""
-    return MAX_PIN_ATTEMPTS - st.session_state.pin_attempts
+def is_locked(locked_until: float) -> bool:
+    """Check if PIN entry is currently locked out."""
+    return locked_until > time.time()
 
 
-def check_session_timeout() -> bool:
+def get_lockout_remaining(locked_until: float) -> int:
+    """Get remaining lockout time in seconds."""
+    return max(0, int(locked_until - time.time()))
+
+
+def check_session_timeout(last_activity: float, timeout: int = SESSION_TIMEOUT) -> bool:
     """
     Check if the session has timed out.
     Returns True if session is still valid, False if timed out.
     """
-    if not st.session_state.get("pin_verified", False):
-        return True  # No session to timeout
-
-    elapsed = time.time() - st.session_state.get("last_activity", time.time())
-    if elapsed > SESSION_TIMEOUT:
-        end_session()
-        return False
-    return True
+    return (time.time() - last_activity) <= timeout
 
 
-def refresh_activity():
-    """Update the last activity timestamp."""
-    st.session_state.last_activity = time.time()
+def validate_pin_attempt(
+    entered_pin: str,
+    pin_hash: bytes,
+    attempts: int,
+    locked_until: float,
+) -> Tuple[bool, int, float, str]:
+    """
+    Full PIN validation with lockout logic.
+
+    Args:
+        entered_pin: The PIN entered by the user
+        pin_hash: bcrypt hash of the correct PIN
+        attempts: Current number of failed attempts
+        locked_until: Timestamp until which PIN entry is locked
+
+    Returns:
+        Tuple of (success, new_attempts, new_locked_until, message_key)
+    """
+    # Check lockout
+    if is_locked(locked_until):
+        remaining = get_lockout_remaining(locked_until)
+        return False, attempts, locked_until, "pin_locked"
+
+    # Auto-unlock expired lockout
+    if locked_until > 0 and locked_until <= time.time():
+        attempts = 0
+        locked_until = 0
+
+    # Validate format
+    if not entered_pin or len(entered_pin) != MAX_PIN_LENGTH or not entered_pin.isdigit():
+        return False, attempts, locked_until, "invalid_pin_format"
+
+    # Verify against hash
+    if verify_pin(entered_pin, pin_hash):
+        logger.info("PIN verified successfully")
+        return True, 0, 0, "pin_correct"
+    else:
+        attempts += 1
+        logger.warning("Incorrect PIN attempt (%d/%d)", attempts, MAX_PIN_ATTEMPTS)
+        if attempts >= MAX_PIN_ATTEMPTS:
+            locked_until = time.time() + LOCKOUT_DURATION
+            logger.warning("PIN locked out for %d seconds", LOCKOUT_DURATION)
+            return False, attempts, locked_until, "pin_locked"
+        return False, attempts, locked_until, "pin_incorrect"
 
 
-def insert_card():
-    """Simulate card insertion."""
-    st.session_state.card_inserted = True
-    st.session_state.pin_verified = False
-    st.session_state.pin_attempts = 0
-    st.session_state.pin_locked_until = 0
-    st.session_state.session_token = None
-    st.session_state.last_activity = time.time()
+def sanitize_input(text: str, max_length: int = MAX_INPUT_LENGTH) -> str:
+    """Sanitize user text input — strip, truncate, remove control characters."""
+    if not text:
+        return ""
+    # Remove control characters except newlines
+    cleaned = "".join(c for c in text if c.isprintable() or c in ("\n", "\t"))
+    return cleaned.strip()[:max_length]
 
 
-def end_session():
-    """End the current session and clear all sensitive data."""
-    st.session_state.pin_verified = False
-    st.session_state.session_token = None
-    st.session_state.card_inserted = False
-    st.session_state.pin_attempts = 0
-    st.session_state.pin_locked_until = 0
-    st.session_state.last_activity = time.time()
-    # Clear pending transaction state
-    if "pending_action" in st.session_state:
-        del st.session_state.pending_action
-    if "pending_amount" in st.session_state:
-        del st.session_state.pending_amount
-
-
-def is_authenticated() -> bool:
-    """Check if the user is currently authenticated (card inserted + PIN verified)."""
-    return (
-        st.session_state.get("card_inserted", False)
-        and st.session_state.get("pin_verified", False)
-        and st.session_state.get("session_token") is not None
-    )
+def generate_session_token() -> str:
+    """Generate a cryptographically secure session token."""
+    return secrets.token_hex(16)

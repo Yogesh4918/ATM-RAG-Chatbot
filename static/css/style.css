@@ -5,6 +5,34 @@
 /* ── Reset & Vars ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ── Accessibility: Skip Link ── */
+.skip-link {
+    position: absolute; top: -100%; left: 1rem; z-index: 9999;
+    padding: 0.8rem 1.5rem; border-radius: var(--radius-md);
+    background: var(--accent-cyan); color: var(--bg-primary);
+    font-weight: 700; font-size: 0.9rem; text-decoration: none;
+    transition: top 0.2s;
+}
+.skip-link:focus { top: 1rem; }
+
+/* ── Accessibility: Screen Reader Only ── */
+.sr-only {
+    position: absolute !important; width: 1px !important; height: 1px !important;
+    padding: 0 !important; margin: -1px !important; overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important;
+}
+
+/* ── Accessibility: Focus Visible ── */
+*:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
+}
+button:focus-visible, .glass-select:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(0, 242, 255, 0.2);
+}
+
 :root {
     --bg-primary: #060614;
     --bg-secondary: #0d0d2b;
@@ -491,3 +519,39 @@ body {
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--accent-cyan), var(--accent-purple)); border-radius: 10px; }
+
+/* ═══════════════════════════════════════════
+   ACCESSIBILITY: Reduced Motion
+   ═══════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    .bg-mesh { animation: none; }
+    .header-bg { animation: none; }
+    .card-icon { animation: none; }
+    .pulse-btn::after { animation: none; }
+    .mic-btn.listening { animation: none; }
+    .mic-btn.listening .mic-pulse { animation: none; }
+    .status-dot { animation: none; }
+}
+
+/* ═══════════════════════════════════════════
+   ACCESSIBILITY: High Contrast
+   ═══════════════════════════════════════════ */
+@media (forced-colors: active) {
+    .primary-btn, .send-btn, .mic-btn {
+        border: 2px solid ButtonText;
+    }
+    .msg-bubble.user, .msg-bubble.bot {
+        border: 1px solid CanvasText;
+    }
+    .status-dot.active {
+        background: Highlight;
+    }
+    .neon-divider {
+        background: CanvasText;
+    }
+}

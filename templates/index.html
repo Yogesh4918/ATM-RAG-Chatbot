@@ -4,210 +4,215 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart ATM — Multilingual Voice Chatbot</title>
-    <meta name="description" content="RAG-powered multilingual voice ATM chatbot supporting 7 Indian languages">
+    <meta name="description" content="RAG-powered multilingual voice ATM chatbot supporting 7 Indian languages with Google Gemini AI">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏧</text></svg>">
 </head>
 <body>
 
+<!-- Skip to main content link for keyboard/screen reader users -->
+<a href="#mainContent" class="skip-link">Skip to main content</a>
+
 <!-- ═══════════ Background Mesh ═══════════ -->
-<div class="bg-mesh"></div>
+<div class="bg-mesh" aria-hidden="true"></div>
 
 <!-- ═══════════ Main Layout ═══════════ -->
 <div class="app-container">
 
     <!-- ─── Sidebar ─── -->
-    <aside class="sidebar" id="sidebar">
+    <aside class="sidebar" id="sidebar" role="complementary" aria-label="ATM Controls">
         <div class="sidebar-header">
-            <div class="logo-icon">🏧</div>
+            <div class="logo-icon" aria-hidden="true">🏧</div>
             <h2 class="logo-text">Smart ATM</h2>
             <p class="logo-sub">Voice-Enabled Banking</p>
         </div>
 
-        <div class="neon-divider"></div>
+        <div class="neon-divider" aria-hidden="true"></div>
 
         <!-- Language Selection -->
         <div class="sidebar-section">
-            <h3>🌐 <span id="langLabel">Select Language</span></h3>
-            <select id="languageSelect" class="glass-select">
-                <option value="English">🇬🇧 English</option>
-                <option value="Hindi">🇮🇳 हिन्दी (Hindi)</option>
-                <option value="Gujarati">🇮🇳 ગુજરાતી (Gujarati)</option>
-                <option value="Marathi">🇮🇳 मराठी (Marathi)</option>
-                <option value="Tamil">🇮🇳 தமிழ் (Tamil)</option>
-                <option value="Telugu">🇮🇳 తెలుగు (Telugu)</option>
-                <option value="Bengali">🇮🇳 বাংলা (Bengali)</option>
+            <h3><span aria-hidden="true">🌐</span> <span id="langLabel">Select Language</span></h3>
+            <label for="languageSelect" class="sr-only">Select Language</label>
+            <select id="languageSelect" class="glass-select" aria-label="Select Language">
+                {% for key, meta in languages.items() %}
+                <option value="{{ key }}">{{ meta.flag }} {{ meta.native_name }} ({{ key }})</option>
+                {% endfor %}
             </select>
         </div>
 
-        <div class="neon-divider"></div>
+        <div class="neon-divider" aria-hidden="true"></div>
 
         <!-- Session Status -->
         <div class="sidebar-section">
-            <h3>📊 Session Status</h3>
-            <div class="status-row" id="cardStatus">
-                <span class="status-dot inactive"></span>
+            <h3><span aria-hidden="true">📊</span> <span id="sessionStatusLabel">Session Status</span></h3>
+            <div class="status-row" id="cardStatus" role="status" aria-live="polite">
+                <span class="status-dot inactive" aria-hidden="true"></span>
                 <span>No Card</span>
             </div>
-            <div class="status-row" id="authStatus" style="display:none;">
-                <span class="status-dot active"></span>
+            <div class="status-row" id="authStatus" style="display:none;" role="status" aria-live="polite">
+                <span class="status-dot active" aria-hidden="true"></span>
                 <span>Authenticated</span>
             </div>
         </div>
 
         <!-- Account Info (shown when authenticated) -->
-        <div id="accountInfo" class="glass-card account-card" style="display:none;">
+        <div id="accountInfo" class="glass-card account-card" style="display:none;" aria-label="Account Information">
             <div class="info-label" id="cardNumLabel">Card Number</div>
-            <div class="info-value mono" id="cardNum">XXXX-XXXX-XXXX-1234</div>
+            <div class="info-value mono" id="cardNum" aria-label="Card Number">XXXX-XXXX-XXXX-1234</div>
             <div class="info-label" id="balLabel">Available Balance</div>
-            <div class="info-value balance-display" id="balDisplay">₹25,000</div>
+            <div class="info-value balance-display" id="balDisplay" aria-label="Available Balance">₹25,000</div>
         </div>
 
-        <div class="neon-divider"></div>
+        <div class="neon-divider" aria-hidden="true"></div>
 
         <!-- Quick Actions -->
         <div class="sidebar-section" id="quickActionsSection" style="display:none;">
-            <h3>⚡ <span id="qaLabel">Quick Actions</span></h3>
-            <button class="quick-btn" onclick="quickAction('withdraw')">💵 <span id="qWithdraw">Withdraw</span></button>
-            <button class="quick-btn" onclick="quickAction('balance')">💰 <span id="qBalance">Balance</span></button>
-            <button class="quick-btn" onclick="quickAction('mini_statement')">📋 <span id="qStatement">Statement</span></button>
-            <button class="quick-btn" onclick="quickAction('help')">❓ <span id="qHelp">Help</span></button>
+            <h3><span aria-hidden="true">⚡</span> <span id="qaLabel">Quick Actions</span></h3>
+            <button class="quick-btn" onclick="quickAction('withdraw')" aria-label="Withdraw Cash"><span aria-hidden="true">💵</span> <span id="qWithdraw">Withdraw</span></button>
+            <button class="quick-btn" onclick="quickAction('balance')" aria-label="Check Balance"><span aria-hidden="true">💰</span> <span id="qBalance">Balance</span></button>
+            <button class="quick-btn" onclick="quickAction('mini_statement')" aria-label="Mini Statement"><span aria-hidden="true">📋</span> <span id="qStatement">Statement</span></button>
+            <button class="quick-btn" onclick="quickAction('help')" aria-label="Help"><span aria-hidden="true">❓</span> <span id="qHelp">Help</span></button>
         </div>
 
         <!-- End Session -->
-        <button class="end-session-btn" id="endSessionBtn" style="display:none;" onclick="endSession()">
-            🚪 <span id="exitLabel">End Session</span>
+        <button class="end-session-btn" id="endSessionBtn" style="display:none;" onclick="endSession()" aria-label="End Session">
+            <span aria-hidden="true">🚪</span> <span id="exitLabel">End Session</span>
         </button>
 
         <!-- Security Note -->
-        <div class="security-note">
-            🔒 <span id="pinSecNote">PIN can only be entered via keypad</span>
+        <div class="security-note" role="note">
+            <span aria-hidden="true">🔒</span> <span id="pinSecNote">PIN can only be entered via keypad</span>
         </div>
 
         <!-- Demo PIN -->
-        <div class="demo-pin-card">
-            <div class="demo-label">🔑 Demo PIN</div>
+        <div class="demo-pin-card" role="note" aria-label="Demo PIN Information">
+            <div class="demo-label"><span aria-hidden="true">🔑</span> Demo PIN</div>
             <div class="demo-value">PIN: <strong>1234</strong></div>
         </div>
 
         <!-- Mobile Toggle -->
-        <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">☰</button>
+        <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" aria-label="Toggle sidebar menu" aria-expanded="false">☰</button>
     </aside>
 
     <!-- ─── Main Content ─── -->
-    <main class="main-content">
+    <main class="main-content" id="mainContent">
 
         <!-- ATM Header -->
         <header class="atm-header">
-            <div class="header-bg"></div>
-            <h1>🏧 Smart ATM</h1>
-            <p>RAG-Powered Multilingual Voice Assistant</p>
+            <div class="header-bg" aria-hidden="true"></div>
+            <h1><span aria-hidden="true">🏧</span> Smart ATM</h1>
+            <p id="headerSubtitle">RAG-Powered Multilingual Voice Assistant</p>
         </header>
 
         <!-- ═══ Card Insert Screen ═══ -->
-        <div id="cardInsertScreen" class="screen active">
-            <div class="card-slot">
-                <div class="card-icon">💳</div>
+        <div id="cardInsertScreen" class="screen active" role="region" aria-label="Card Insert">
+            <div class="card-slot" role="button" tabindex="0" onclick="insertCard()" onkeydown="if(event.key==='Enter')insertCard()">
+                <div class="card-icon" aria-hidden="true">💳</div>
                 <h3 id="insertCardTitle">Insert Card</h3>
-                <p>Tap here to start your session</p>
-                <button class="primary-btn pulse-btn" onclick="insertCard()" id="insertCardBtn">
-                    💳 <span>Insert Card</span>
+                <p id="insertCardSubtitle">Tap here to start your session</p>
+                <button class="primary-btn pulse-btn" onclick="insertCard()" id="insertCardBtn" aria-label="Insert Card">
+                    <span aria-hidden="true">💳</span> <span id="insertCardBtnText">Insert Card</span>
                 </button>
             </div>
         </div>
 
         <!-- ═══ Chat Screen ═══ -->
-        <div id="chatScreen" class="screen">
+        <div id="chatScreen" class="screen" role="region" aria-label="Chat">
             <!-- Chat Messages -->
-            <div class="chat-container" id="chatContainer">
+            <div class="chat-container" id="chatContainer" role="log" aria-live="polite" aria-label="Chat messages">
                 <div class="chat-empty" id="chatEmpty">
-                    <div class="empty-icon">💬</div>
+                    <div class="empty-icon" aria-hidden="true">💬</div>
                     <p id="emptyMsg">Ask me anything about ATM services!</p>
                 </div>
             </div>
 
             <!-- Receipt Area -->
-            <div id="receiptArea"></div>
+            <div id="receiptArea" role="region" aria-label="Receipt"></div>
             <!-- Mini Statement Area -->
-            <div id="statementArea"></div>
+            <div id="statementArea" role="region" aria-label="Statement"></div>
 
-            <div class="neon-divider"></div>
+            <div class="neon-divider" aria-hidden="true"></div>
 
             <!-- Input Area -->
             <div class="input-area" id="inputArea">
                 <!-- Input Tabs -->
-                <div class="input-tabs">
-                    <button class="tab-btn active" onclick="switchTab('voice')" id="voiceTab">🎤 <span id="voiceLabel">Voice</span></button>
-                    <button class="tab-btn" onclick="switchTab('text')" id="textTab">⌨️ <span id="textLabel">Text</span></button>
+                <div class="input-tabs" role="tablist" aria-label="Input method">
+                    <button class="tab-btn active" onclick="switchTab('voice')" id="voiceTab" role="tab" aria-selected="true" aria-controls="voiceContent"><span aria-hidden="true">🎤</span> <span id="voiceLabel">Voice</span></button>
+                    <button class="tab-btn" onclick="switchTab('text')" id="textTab" role="tab" aria-selected="false" aria-controls="textContent"><span aria-hidden="true">⌨️</span> <span id="textLabel">Text</span></button>
                 </div>
 
                 <!-- Voice Input -->
-                <div class="tab-content active" id="voiceContent">
+                <div class="tab-content active" id="voiceContent" role="tabpanel" aria-labelledby="voiceTab">
                     <div class="voice-area">
-                        <button class="mic-btn" id="micBtn" onclick="toggleVoice()">
-                            <span class="mic-icon">🎙️</span>
-                            <span class="mic-pulse"></span>
+                        <button class="mic-btn" id="micBtn" onclick="toggleVoice()" aria-label="Press to speak" aria-pressed="false">
+                            <span class="mic-icon" aria-hidden="true">🎙️</span>
+                            <span class="mic-pulse" aria-hidden="true"></span>
                         </button>
-                        <p class="mic-label" id="micLabel">Press to Speak</p>
+                        <p class="mic-label" id="micLabel" aria-live="polite">Press to Speak</p>
                     </div>
                 </div>
 
                 <!-- Text Input -->
-                <div class="tab-content" id="textContent">
+                <div class="tab-content" id="textContent" role="tabpanel" aria-labelledby="textTab">
                     <form class="text-input-form" onsubmit="sendText(event)">
-                        <input type="text" class="chat-input" id="chatInput" placeholder="Type your message..." autocomplete="off">
-                        <button type="submit" class="send-btn">➤</button>
+                        <label for="chatInput" class="sr-only">Type your message</label>
+                        <input type="text" class="chat-input" id="chatInput" placeholder="Type your message..." autocomplete="off" aria-label="Type your message">
+                        <button type="submit" class="send-btn" aria-label="Send message">➤</button>
                     </form>
                 </div>
             </div>
 
             <!-- Amount Input (hidden by default) -->
-            <div class="amount-area" id="amountArea" style="display:none;">
+            <div class="amount-area" id="amountArea" style="display:none;" role="dialog" aria-label="Enter withdrawal amount">
                 <div class="amount-card">
                     <h3 id="amountTitle">Enter Amount</h3>
                     <div class="amount-input-group">
-                        <span class="currency-prefix">₹</span>
-                        <input type="number" id="amountInput" class="amount-input" min="100" max="10000" step="100" value="500">
+                        <span class="currency-prefix" aria-hidden="true">₹</span>
+                        <label for="amountInput" class="sr-only">Withdrawal amount in rupees</label>
+                        <input type="number" id="amountInput" class="amount-input" min="100" max="10000" step="100" value="500" aria-label="Withdrawal amount">
                     </div>
-                    <div class="amount-presets">
-                        <button class="preset-btn" onclick="setAmount(500)">₹500</button>
-                        <button class="preset-btn" onclick="setAmount(1000)">₹1,000</button>
-                        <button class="preset-btn" onclick="setAmount(2000)">₹2,000</button>
-                        <button class="preset-btn" onclick="setAmount(5000)">₹5,000</button>
+                    <div class="amount-presets" role="group" aria-label="Preset amounts">
+                        <button class="preset-btn" onclick="setAmount(500)" aria-label="500 rupees">₹500</button>
+                        <button class="preset-btn" onclick="setAmount(1000)" aria-label="1000 rupees">₹1,000</button>
+                        <button class="preset-btn" onclick="setAmount(2000)" aria-label="2000 rupees">₹2,000</button>
+                        <button class="preset-btn" onclick="setAmount(5000)" aria-label="5000 rupees">₹5,000</button>
                     </div>
-                    <button class="primary-btn" onclick="confirmWithdraw()" id="confirmWithdrawBtn">💵 Withdraw</button>
-                    <button class="ghost-btn" onclick="cancelAmount()">Cancel</button>
+                    <button class="primary-btn" onclick="confirmWithdraw()" id="confirmWithdrawBtn" aria-label="Confirm withdrawal"><span aria-hidden="true">💵</span> <span id="confirmWithdrawBtnText">Withdraw</span></button>
+                    <button class="ghost-btn" onclick="cancelAmount()" aria-label="Cancel withdrawal"><span id="cancelAmountBtnText">Cancel</span></button>
                 </div>
             </div>
         </div>
 
         <!-- ═══ PIN Modal ═══ -->
-        <div class="modal-overlay" id="pinModal" style="display:none;">
+        <div class="modal-overlay" id="pinModal" style="display:none;" role="dialog" aria-modal="true" aria-label="Enter PIN">
             <div class="pin-keypad">
                 <h3 id="pinTitle">🔐 Enter PIN</h3>
-                <p class="pin-subtitle" id="pinSubtitle">Enter your 4-digit PIN</p>
-                <div class="pin-display" id="pinDisplay">○ ○ ○ ○</div>
-                <div class="pin-error" id="pinError"></div>
-                <div class="keypad-grid">
-                    <button class="key-btn" onclick="pinKey('1')">1</button>
-                    <button class="key-btn" onclick="pinKey('2')">2</button>
-                    <button class="key-btn" onclick="pinKey('3')">3</button>
-                    <button class="key-btn" onclick="pinKey('4')">4</button>
-                    <button class="key-btn" onclick="pinKey('5')">5</button>
-                    <button class="key-btn" onclick="pinKey('6')">6</button>
-                    <button class="key-btn" onclick="pinKey('7')">7</button>
-                    <button class="key-btn" onclick="pinKey('8')">8</button>
-                    <button class="key-btn" onclick="pinKey('9')">9</button>
-                    <button class="key-btn key-clear" onclick="pinClear()">⌫</button>
-                    <button class="key-btn" onclick="pinKey('0')">0</button>
-                    <button class="key-btn key-submit" onclick="pinSubmit()">✓</button>
+                <p class="pin-subtitle" id="pinSubtitle">Enter your 4-digit PIN using the secure keypad below.</p>
+                <div class="pin-display" id="pinDisplay" aria-label="PIN digits entered" aria-live="polite">○ ○ ○ ○</div>
+                <div class="pin-error" id="pinError" role="alert" aria-live="assertive"></div>
+                <div class="keypad-grid" role="group" aria-label="PIN keypad">
+                    <button class="key-btn" onclick="pinKey('1')" aria-label="1">1</button>
+                    <button class="key-btn" onclick="pinKey('2')" aria-label="2">2</button>
+                    <button class="key-btn" onclick="pinKey('3')" aria-label="3">3</button>
+                    <button class="key-btn" onclick="pinKey('4')" aria-label="4">4</button>
+                    <button class="key-btn" onclick="pinKey('5')" aria-label="5">5</button>
+                    <button class="key-btn" onclick="pinKey('6')" aria-label="6">6</button>
+                    <button class="key-btn" onclick="pinKey('7')" aria-label="7">7</button>
+                    <button class="key-btn" onclick="pinKey('8')" aria-label="8">8</button>
+                    <button class="key-btn" onclick="pinKey('9')" aria-label="9">9</button>
+                    <button class="key-btn key-clear" onclick="pinClear()" aria-label="Delete last digit">⌫</button>
+                    <button class="key-btn" onclick="pinKey('0')" aria-label="0">0</button>
+                    <button class="key-btn key-submit" onclick="pinSubmit()" aria-label="Submit PIN">✓</button>
                 </div>
             </div>
         </div>
 
     </main>
 </div>
+
+<!-- Screen reader announcements -->
+<div id="srAnnounce" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
 
 <!-- ── Audio element for TTS ── -->
 <audio id="ttsAudio" preload="none"></audio>

@@ -2,6 +2,7 @@
 ╔══════════════════════════════════════════════════════════════╗
 ║  Smart ATM Chatbot — Flask Backend + API                    ║
 ║  Serves the frontend and provides REST API endpoints        ║
+║  Integrates Google Gemini AI for intelligent responses      ║
 ╚══════════════════════════════════════════════════════════════╝
 """
 
@@ -10,7 +11,7 @@ import io
 import uuid
 import time
 import json
-import hashlib
+import logging
 from pathlib import Path
 from datetime import datetime, timedelta
 import random
@@ -21,37 +22,78 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ── Logging Setup ──
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("smart_atm")
+
 # ── App Setup ──
 app = Flask(__name__,
             template_folder="templates",
             static_folder="static")
-app.secret_key = os.urandom(24)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=False,  # Set True in production with HTTPS
+)
 
 BASE_DIR = Path(__file__).parent
+
+# ── Import application modules ──
+from src.translations import LANGUAGES, UI_TEXT, get_text
+from src.security import (
+    hash_pin, verify_pin, sanitize_input,
+    MAX_PIN_ATTEMPTS, LOCKOUT_DURATION, MAX_PIN_LENGTH,
+)
+from src.transaction_engine import (
+    generate_mock_history, format_currency,
+    INITIAL_BALANCE, DAILY_WITHDRAWAL_LIMIT, PER_TRANSACTION_LIMIT,
+)
+from src.rag_engine import keyword_search, query_rag, load_knowledge_base
+from src.nlp_engine import classify_intent, extract_amount
+
+# ═══════════════════════════════════════════════════════════
+# Security Headers
+# ═══════════════════════════════════════════════════════════
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to every response."""
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "media-src 'self' blob:; "
+    )
+    return response
 
 # ═══════════════════════════════════════════════════════════
 # In-Memory Session Store
 # ═══════════════════════════════════════════════════════════
-sessions = {}
+sessions: dict = {}
 
+# Pre-hash the default PIN with bcrypt (done once at startup)
 DEFAULT_PIN = "1234"
-DEFAULT_PIN_HASH = hashlib.sha256(DEFAULT_PIN.encode()).hexdigest()
-DAILY_LIMIT = 20000
-PER_TX_LIMIT = 10000
-INITIAL_BALANCE = 25000
-MAX_PIN_ATTEMPTS = 3
-LOCKOUT_SECONDS = 30
-SESSION_TIMEOUT = 120
+DEFAULT_PIN_HASH = hash_pin(DEFAULT_PIN)
 
-# ── Load translations ──
-from src.translations import LANGUAGES, UI_TEXT, get_text
+SESSION_TIMEOUT = 120  # seconds
+RATE_LIMIT_WINDOW = 60  # seconds
+MAX_PIN_REQUESTS = 10   # max PIN attempts per minute per session
 
-# ── Load knowledge base ──
-KB_PATH = BASE_DIR / "data" / "banking_knowledge.json"
-KNOWLEDGE_BASE = []
-if KB_PATH.exists():
-    with open(KB_PATH, "r", encoding="utf-8") as f:
-        KNOWLEDGE_BASE = json.load(f)
+# Pre-load knowledge base at startup
+_kb = load_knowledge_base()
+logger.info("Smart ATM started — Knowledge base: %d entries, Languages: %d",
+            len(_kb), len(LANGUAGES))
 
 
 def get_session():
@@ -61,6 +103,7 @@ def get_session():
         sid = str(uuid.uuid4())
         session["sid"] = sid
         sessions[sid] = create_fresh_session()
+        logger.info("New session created: %s", sid[:8])
     s = sessions[sid]
     # Check timeout
     if s["card_inserted"] and s["pin_verified"]:
@@ -68,45 +111,21 @@ def get_session():
             lang = s["language"]
             sessions[sid] = create_fresh_session()
             sessions[sid]["language"] = lang
+            logger.info("Session timed out: %s", sid[:8])
             return sessions[sid], True  # timed out
     s["last_activity"] = time.time()
     return s, False
 
 
-def create_fresh_session():
+def create_fresh_session() -> dict:
     """Create a new empty session state."""
-    tx_types = [
-        ("Credit", "Salary Credited", 2000, 50000),
-        ("Debit", "ATM Withdrawal", 500, 10000),
-        ("Credit", "UPI Transfer Received", 100, 5000),
-        ("Debit", "Online Purchase", 200, 15000),
-        ("Debit", "Bill Payment", 100, 5000),
-        ("Credit", "Refund", 50, 2000),
-    ]
-    history = []
-    bal = INITIAL_BALANCE
-    now = datetime.now()
-    for i in range(10):
-        tt, desc, mn, mx = random.choice(tx_types)
-        amt = random.randrange(mn, mx, 100)
-        if tt == "Credit":
-            bal += amt
-        else:
-            if bal >= amt:
-                bal -= amt
-            else:
-                continue
-        history.append({
-            "date": (now - timedelta(days=i, hours=random.randint(1, 23))).strftime("%d-%b-%Y %H:%M"),
-            "type": tt, "description": desc, "amount": amt, "balance": bal
-        })
-    history.reverse()
-
+    history = generate_mock_history()
     return {
         "card_inserted": False,
         "pin_verified": False,
         "pin_attempts": 0,
         "pin_locked_until": 0,
+        "pin_request_times": [],
         "language": "English",
         "balance": INITIAL_BALANCE,
         "daily_withdrawn": 0,
@@ -120,133 +139,30 @@ def create_fresh_session():
     }
 
 
-def format_currency(amount):
-    """Format amount in Indian currency style."""
-    s = str(int(amount))
-    if len(s) <= 3:
-        return f"₹{s}"
-    last_three = s[-3:]
-    remaining = s[:-3]
-    groups = []
-    while len(remaining) > 2:
-        groups.insert(0, remaining[-2:])
-        remaining = remaining[:-2]
-    if remaining:
-        groups.insert(0, remaining)
-    return f"₹{','.join(groups)},{last_three}"
+def cleanup_stale_sessions():
+    """Remove sessions inactive for more than 10 minutes."""
+    cutoff = time.time() - 600
+    stale = [sid for sid, s in sessions.items() if s["last_activity"] < cutoff]
+    for sid in stale:
+        del sessions[sid]
+    if stale:
+        logger.info("Cleaned up %d stale sessions", len(stale))
 
 
-def t(s, key, **kwargs):
+def check_rate_limit(s: dict) -> bool:
+    """Check if PIN request rate limit is exceeded."""
+    now = time.time()
+    s["pin_request_times"] = [t for t in s.get("pin_request_times", [])
+                               if now - t < RATE_LIMIT_WINDOW]
+    if len(s["pin_request_times"]) >= MAX_PIN_REQUESTS:
+        return False  # rate limited
+    s["pin_request_times"].append(now)
+    return True
+
+
+def t(s: dict, key: str, **kwargs) -> str:
     """Get translated text."""
     return get_text(s["language"], key, **kwargs)
-
-
-# ═══════════════════════════════════════════════════════════
-# NLP — Intent & Entity Extraction (inline for speed)
-# ═══════════════════════════════════════════════════════════
-INTENT_KW = {
-    "withdraw": ["withdraw", "withdrawal", "cash", "take out", "want money", "need money", "get money", "give me",
-                  "निकासी", "निकालना", "पैसे", "नकद", "रुपये", "रुपया", "चाहिए",
-                  "ઉપાડ", "ઉપાડવા", "રૂપિયા", "પૈસા", "રોકડ", "જોઈએ",
-                  "काढणे", "काढा", "रोख", "रक्कम", "हवे",
-                  "எடுக்க", "பணம்", "ரூபாய்",
-                  "విత్‌డ్రా", "డబ్బు", "రూపాయలు", "నగదు", "కావాలి",
-                  "তোলা", "টাকা", "নগদ", "চাই"],
-    "balance": ["balance", "check balance", "how much", "remaining", "available",
-                "शेष", "बैलेंस", "कितना", "खाता",
-                "બેલેન્સ", "બાકી", "કેટલા",
-                "शिल्लक", "बॅलन्स", "किती",
-                "இருப்பு", "எவ்வளவு",
-                "బ్యాలెన్స్", "ఎంత",
-                "ব্যালেন্স", "কত"],
-    "mini_statement": ["mini statement", "statement", "transaction history", "recent transactions", "history",
-                       "मिनी स्टेटमेंट", "स्टेटमेंट", "लेन-देन",
-                       "મિની સ્ટેટમેન્ટ", "વ્યવહાર",
-                       "मिनी स्टेटमेंट", "व्यवहार",
-                       "மினி அறிக்கை", "பரிவர்த்தனை",
-                       "మినీ స్టేట్‌మెంట్", "లావాదేవీ",
-                       "মিনি স্টেটমেন্ট", "লেনদেন"],
-    "greeting": ["hello", "hi", "hey", "good morning", "namaste",
-                 "नमस्ते", "हेलो", "નમસ્તે", "হ্যালো", "வணக்கம்", "నమస్కారం", "नमस्कार"],
-    "goodbye": ["bye", "goodbye", "exit", "quit", "end", "done", "thank", "close",
-                "अलविदा", "धन्यवाद", "આવજો", "আভার", "निरोप", "நன்றி", "ధన్యవాదాలు", "বিদায়"],
-}
-
-NUMERAL_MAPS = [
-    str.maketrans("०१२३४५६७८९", "0123456789"),
-    str.maketrans("૦૧૨૩૪૫૬૭૮૯", "0123456789"),
-    str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789"),
-    str.maketrans("௦௧௨௩௪௫௬௭௮௯", "0123456789"),
-    str.maketrans("౦౧౨౩౪౫౬౭౮౯", "0123456789"),
-]
-
-
-def extract_amount(text):
-    for m in NUMERAL_MAPS:
-        text = text.translate(m)
-    patterns = [r"₹\s*([\d,]+)", r"rs\.?\s*([\d,]+)", r"([\d,]+)\s*(?:₹|rs|rupee|रुपय|રૂપિયા|ரூபாய்|రూపాయ|টাকা)",
-                r"\b(\d{3,})\b"]
-    for p in patterns:
-        match = re.search(p, text, re.IGNORECASE)
-        if match:
-            try:
-                return int(match.group(1).replace(",", ""))
-            except ValueError:
-                continue
-    nums = re.findall(r"\b(\d+)\b", text)
-    for n in nums:
-        val = int(n)
-        if 100 <= val <= 100000:
-            return val
-    return None
-
-
-def classify_intent(text, lang="English"):
-    text_lower = text.lower().strip()
-    scores = {}
-    for intent, kws in INTENT_KW.items():
-        sc = sum(2 for kw in kws if kw.lower() in text_lower)
-        if sc > 0:
-            scores[intent] = sc
-    amount = extract_amount(text)
-    if scores:
-        best = max(scores, key=scores.get)
-        conf = min(1.0, scores[best] / 4.0)
-        if amount and best not in ("withdraw",):
-            best = "withdraw"
-        return {"intent": best, "confidence": conf, "amount": amount}
-    if amount:
-        return {"intent": "withdraw", "confidence": 0.4, "amount": amount}
-    return {"intent": "unknown", "confidence": 0, "amount": amount}
-
-
-# ═══════════════════════════════════════════════════════════
-# RAG — Keyword search over knowledge base
-# ═══════════════════════════════════════════════════════════
-STOP_WORDS = {"the", "a", "an", "is", "are", "was", "were", "be", "do", "does", "did",
-              "can", "could", "will", "would", "should", "i", "me", "my", "we", "you",
-              "your", "it", "they", "this", "that", "what", "which", "how", "when",
-              "where", "why", "from", "to", "in", "on", "at", "for", "of", "with",
-              "and", "or", "not", "no", "if", "but", "so", "as", "by", "up"}
-
-
-def search_knowledge(query, top_k=3):
-    query_words = set(re.findall(r'\w+', query.lower())) - STOP_WORDS
-    results = []
-    for entry in KNOWLEDGE_BASE:
-        entry_text = f"{entry['question']} {entry['answer']} {entry['category']}".lower()
-        entry_words = set(re.findall(r'\w+', entry_text))
-        common = query_words & entry_words
-        score = len(common) * 3
-        for w in query_words:
-            if w in entry['question'].lower():
-                score += 2
-            if w in entry['category'].lower():
-                score += 1
-        if score > 0:
-            results.append((score, entry))
-    results.sort(key=lambda x: x[0], reverse=True)
-    return [e for _, e in results[:top_k]]
 
 
 # ═══════════════════════════════════════════════════════════
@@ -254,11 +170,14 @@ def search_knowledge(query, top_k=3):
 # ═══════════════════════════════════════════════════════════
 @app.route("/")
 def index():
-    return render_template("index.html")
+    """Serve the main ATM frontend."""
+    cleanup_stale_sessions()
+    return render_template("index.html", languages=LANGUAGES)
 
 
 @app.route("/api/session-status")
 def session_status():
+    """Return current session state."""
     s, timed_out = get_session()
     return jsonify({
         "card_inserted": s["card_inserted"],
@@ -273,6 +192,7 @@ def session_status():
 
 @app.route("/api/insert-card", methods=["POST"])
 def insert_card():
+    """Simulate card insertion."""
     s, _ = get_session()
     s["card_inserted"] = True
     s["pin_verified"] = False
@@ -280,44 +200,65 @@ def insert_card():
     s["pin_locked_until"] = 0
     s["last_activity"] = time.time()
     welcome = t(s, "welcome")
-    s["chat_history"].append({"role": "bot", "content": welcome, "time": datetime.now().strftime("%H:%M")})
+    s["chat_history"].append({
+        "role": "bot", "content": welcome,
+        "time": datetime.now().strftime("%H:%M"),
+    })
+    logger.info("Card inserted")
     return jsonify({"success": True, "message": welcome})
 
 
 @app.route("/api/set-language", methods=["POST"])
 def set_language():
+    """Change the UI language."""
     s, _ = get_session()
-    lang = request.json.get("language", "English")
+    lang = request.json.get("language", "English") if request.json else "English"
+    # Validate language is in allowed list
     if lang in LANGUAGES:
         s["language"] = lang
+        logger.info("Language changed to: %s", lang)
     return jsonify({"success": True, "language": s["language"]})
 
 
 @app.route("/api/validate-pin", methods=["POST"])
-def validate_pin():
+def validate_pin_endpoint():
+    """Validate PIN entry with rate limiting and lockout."""
     s, _ = get_session()
-    pin = request.json.get("pin", "")
 
+    # Rate limiting
+    if not check_rate_limit(s):
+        logger.warning("PIN rate limit exceeded")
+        return jsonify({"success": False, "message": "Too many requests. Please wait."}), 429
+
+    pin = request.json.get("pin", "") if request.json else ""
+
+    # Check lockout
     if s["pin_locked_until"] > time.time():
         remaining = int(s["pin_locked_until"] - time.time())
-        return jsonify({"success": False, "locked": True, "remaining": remaining,
-                        "message": t(s, "pin_locked")})
+        return jsonify({
+            "success": False, "locked": True, "remaining": remaining,
+            "message": t(s, "pin_locked"),
+        })
 
+    # Auto-unlock expired lockout
     if s["pin_locked_until"] > 0 and s["pin_locked_until"] <= time.time():
         s["pin_locked_until"] = 0
         s["pin_attempts"] = 0
 
-    if not pin or len(pin) != 4 or not pin.isdigit():
+    # Validate PIN format
+    if not pin or len(pin) != MAX_PIN_LENGTH or not pin.isdigit():
         return jsonify({"success": False, "message": "Invalid PIN format"})
 
-    pin_hash = hashlib.sha256(pin.encode()).hexdigest()
-    if pin_hash == DEFAULT_PIN_HASH:
+    # Verify PIN using bcrypt
+    if verify_pin(pin, DEFAULT_PIN_HASH):
         s["pin_verified"] = True
         s["pin_attempts"] = 0
         s["last_activity"] = time.time()
         msg = t(s, "pin_correct")
-        # Execute pending action
+        logger.info("PIN verified successfully")
+
         result = {"success": True, "message": msg, "authenticated": True}
+        # Execute pending action
         if s.get("pending_action"):
             tx_result = execute_action(s, s["pending_action"], s.get("pending_amount"))
             result["action_result"] = tx_result
@@ -326,29 +267,36 @@ def validate_pin():
         return jsonify(result)
     else:
         s["pin_attempts"] += 1
+        logger.warning("Incorrect PIN attempt (%d/%d)", s["pin_attempts"], MAX_PIN_ATTEMPTS)
         if s["pin_attempts"] >= MAX_PIN_ATTEMPTS:
-            s["pin_locked_until"] = time.time() + LOCKOUT_SECONDS
-            return jsonify({"success": False, "locked": True, "remaining": LOCKOUT_SECONDS,
-                            "message": t(s, "pin_locked")})
+            s["pin_locked_until"] = time.time() + LOCKOUT_DURATION
+            return jsonify({
+                "success": False, "locked": True, "remaining": LOCKOUT_DURATION,
+                "message": t(s, "pin_locked"),
+            })
         remaining = MAX_PIN_ATTEMPTS - s["pin_attempts"]
-        return jsonify({"success": False, "locked": False,
-                        "message": f"{t(s, 'pin_incorrect')} {t(s, 'attempts_remaining', n=remaining)}"})
+        return jsonify({
+            "success": False, "locked": False,
+            "message": f"{t(s, 'pin_incorrect')} {t(s, 'attempts_remaining', n=remaining)}",
+        })
 
 
 @app.route("/api/process", methods=["POST"])
 def process_input():
+    """Process user text/voice input through NLP pipeline."""
     s, timed_out = get_session()
     if timed_out:
         return jsonify({"type": "timeout", "message": t(s, "session_timeout")})
 
-    text = request.json.get("text", "").strip()
+    raw_text = request.json.get("text", "") if request.json else ""
+    text = sanitize_input(raw_text)
     if not text:
         return jsonify({"type": "error", "message": "Empty input"})
 
     s["last_activity"] = time.time()
     result = classify_intent(text, s["language"])
     intent = result["intent"]
-    amount = result["amount"]
+    amount = result.get("entities", {}).get("amount") or result.get("amount")
 
     # Greeting
     if intent == "greeting":
@@ -370,31 +318,41 @@ def process_input():
         if not s["pin_verified"]:
             s["pending_action"] = intent
             s["pending_amount"] = amount
-            return jsonify({"type": "need_pin", "message": t(s, "enter_pin"), "intent": intent})
+            return jsonify({
+                "type": "need_pin",
+                "message": t(s, "enter_pin"),
+                "intent": intent,
+            })
         return jsonify(execute_action(s, intent, amount))
 
-    # FAQ / Unknown → knowledge search
-    results = search_knowledge(text)
-    if results:
-        answer = results[0]["answer"]
+    # FAQ / Unknown → RAG pipeline (Gemini + keyword search)
+    answer = query_rag(text, s["language"])
+    if answer:
         return jsonify({"type": "faq", "message": answer})
 
     return jsonify({"type": "help", "message": t(s, "ask_anything")})
 
 
-def execute_action(s, intent, amount=None):
+def execute_action(s: dict, intent: str, amount=None) -> dict:
     """Execute a banking action."""
     if intent == "balance":
         msg = t(s, "balance_result", balance=format_currency(s["balance"]))
-        return {"type": "balance", "message": msg, "balance": s["balance"],
-                "formatted_balance": format_currency(s["balance"])}
+        return {
+            "type": "balance", "message": msg,
+            "balance": s["balance"],
+            "formatted_balance": format_currency(s["balance"]),
+        }
 
     elif intent == "mini_statement":
         txns = s["transaction_history"][-5:]
         msg = t(s, "mini_statement")
-        return {"type": "mini_statement", "message": msg, "transactions": txns,
-                "balance": s["balance"], "formatted_balance": format_currency(s["balance"]),
-                "card_number": s["card_number"]}
+        return {
+            "type": "mini_statement", "message": msg,
+            "transactions": txns,
+            "balance": s["balance"],
+            "formatted_balance": format_currency(s["balance"]),
+            "card_number": s["card_number"],
+        }
 
     elif intent == "withdraw":
         if amount is None:
@@ -402,14 +360,14 @@ def execute_action(s, intent, amount=None):
 
         if amount <= 0 or amount % 100 != 0:
             return {"type": "error", "message": t(s, "invalid_amount")}
-        if amount > PER_TX_LIMIT:
-            return {"type": "error", "message": t(s, "exceed_limit", limit=format_currency(PER_TX_LIMIT))}
+        if amount > PER_TRANSACTION_LIMIT:
+            return {"type": "error", "message": t(s, "exceed_limit", limit=format_currency(PER_TRANSACTION_LIMIT))}
 
         today = datetime.now().date()
         if s.get("last_withdrawal_date") != str(today):
             s["daily_withdrawn"] = 0
-        if s["daily_withdrawn"] + amount > DAILY_LIMIT:
-            rem = DAILY_LIMIT - s["daily_withdrawn"]
+        if s["daily_withdrawn"] + amount > DAILY_WITHDRAWAL_LIMIT:
+            rem = DAILY_WITHDRAWAL_LIMIT - s["daily_withdrawn"]
             return {"type": "error", "message": t(s, "exceed_limit", limit=format_currency(rem))}
         if amount > s["balance"]:
             return {"type": "error", "message": t(s, "insufficient_funds", balance=format_currency(s["balance"]))}
@@ -419,38 +377,54 @@ def execute_action(s, intent, amount=None):
         s["daily_withdrawn"] += amount
         s["last_withdrawal_date"] = str(today)
         ref = f"ATM{random.randint(100000, 999999)}"
-        tx = {"date": datetime.now().strftime("%d-%b-%Y %H:%M"), "type": "Debit",
-              "description": "ATM Cash Withdrawal", "amount": amount, "balance": s["balance"]}
+        tx = {
+            "date": datetime.now().strftime("%d-%b-%Y %H:%M"),
+            "type": "Debit",
+            "description": "ATM Cash Withdrawal",
+            "amount": amount,
+            "balance": s["balance"],
+        }
         s["transaction_history"].append(tx)
+        logger.info("Withdrawal: amount=%s, ref=%s", format_currency(amount), ref)
 
         receipt = {
             "card_number": s["card_number"],
             "date_time": datetime.now().strftime("%d-%b-%Y %H:%M:%S"),
             "transaction_type": "Cash Withdrawal",
-            "amount": amount, "formatted_amount": format_currency(amount),
+            "amount": amount,
+            "formatted_amount": format_currency(amount),
             "available_balance": s["balance"],
             "formatted_balance": format_currency(s["balance"]),
             "reference_no": ref,
         }
         msg = t(s, "withdraw_success", amount=format_currency(amount))
-        return {"type": "withdraw_success", "message": msg, "receipt": receipt,
-                "collect_msg": t(s, "collect_cash")}
+        return {
+            "type": "withdraw_success", "message": msg,
+            "receipt": receipt,
+            "collect_msg": t(s, "collect_cash"),
+        }
 
     return {"type": "error", "message": "Unknown action"}
 
 
 @app.route("/api/withdraw", methods=["POST"])
 def api_withdraw():
+    """Direct withdrawal endpoint."""
     s, _ = get_session()
     if not s["pin_verified"]:
         return jsonify({"type": "need_pin", "message": t(s, "enter_pin")})
-    amount = request.json.get("amount", 0)
-    result = execute_action(s, "withdraw", int(amount))
+    raw_amount = request.json.get("amount", 0) if request.json else 0
+    try:
+        amount = int(raw_amount)
+    except (ValueError, TypeError):
+        return jsonify({"type": "error", "message": t(s, "invalid_amount")})
+    result = execute_action(s, "withdraw", amount)
     return jsonify(result)
 
 
 @app.route("/api/end-session", methods=["POST"])
 def end_session_api():
+    """End the current ATM session."""
     s, _ = get_session()
     msg = t(s, "goodbye")
     lang = s["language"]
@@ -458,14 +432,20 @@ def end_session_api():
     if sid:
         sessions[sid] = create_fresh_session()
         sessions[sid]["language"] = lang
+    logger.info("Session ended")
     return jsonify({"success": True, "message": msg})
 
 
 @app.route("/api/tts", methods=["POST"])
 def tts_endpoint():
-    """Generate TTS audio using gTTS."""
-    text = request.json.get("text", "")
-    lang = request.json.get("language", "English")
+    """Generate TTS audio using gTTS (Google Text-to-Speech)."""
+    text = request.json.get("text", "") if request.json else ""
+    lang = request.json.get("language", "English") if request.json else "English"
+
+    text = sanitize_input(text, max_length=1000)
+    if not text:
+        return jsonify({"error": "Empty text"}), 400
+
     tts_code = LANGUAGES.get(lang, LANGUAGES["English"])["tts_code"]
 
     try:
@@ -476,13 +456,18 @@ def tts_endpoint():
         buf.seek(0)
         return send_file(buf, mimetype="audio/mpeg")
     except Exception as e:
+        logger.error("TTS error: %s", e)
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/translations")
 def get_translations():
+    """Return UI translations for the requested language."""
     s, _ = get_session()
     lang = request.args.get("language", s["language"])
+    # Validate language
+    if lang not in UI_TEXT:
+        lang = "English"
     texts = UI_TEXT.get(lang, UI_TEXT["English"])
     return jsonify(texts)
 

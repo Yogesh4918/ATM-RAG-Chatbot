@@ -1,19 +1,21 @@
 """
 RAG Engine — Retrieval-Augmented Generation pipeline.
-Uses LangChain + FAISS + HuggingFace Embeddings + Groq LLaMA 3.3.
-Provides intelligent banking assistance and FAQ answers.
-Falls back to keyword-based search when RAG components are unavailable.
+Uses Google Gemini for AI-powered responses with knowledge base context.
+Falls back to keyword-based search when Gemini is unavailable.
 """
 
 import json
 import os
 import re
+import logging
 from pathlib import Path
+from typing import Optional
+from functools import lru_cache
 
-import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────
 # Data paths
@@ -21,10 +23,9 @@ load_dotenv()
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
 KNOWLEDGE_FILE = DATA_DIR / "banking_knowledge.json"
-FAISS_INDEX_DIR = DATA_DIR / "faiss_index"
 
 # ─────────────────────────────────────────────────────────────
-# Language prompts for RAG responses
+# Language prompts for Gemini responses
 # ─────────────────────────────────────────────────────────────
 LANGUAGE_INSTRUCTIONS = {
     "English": "Respond in English.",
@@ -34,22 +35,53 @@ LANGUAGE_INSTRUCTIONS = {
     "Tamil": "தமிழில் பதிலளிக்கவும். Respond in Tamil language.",
     "Telugu": "దయచేసి తెలుగులో సమాధానం ఇవ్వండి. Respond in Telugu language.",
     "Bengali": "অনুগ্রহ করে বাংলায় উত্তর দিন. Respond in Bengali language.",
+    "Punjabi": "ਕਿਰਪਾ ਕਰਕੇ ਪੰਜਾਬੀ ਵਿੱਚ ਜਵਾਬ ਦਿਓ. Respond in Punjabi language.",
+    "Kashmiri": "Respond in Kashmiri language using Devanagari or Nastaliq script.",
+    "Ladakhi": "Respond in simple Hindi. The user speaks Ladakhi.",
+    "Manipuri": "Respond in Manipuri (Meitei) language using Bengali script.",
+    "Ao": "Respond in simple English. The user speaks Ao Naga language.",
+    "Nissi": "Respond in simple English. The user speaks Nissi/Nyishi language.",
+    "Khasi": "Respond in simple English. The user speaks Khasi language.",
+    "Odia": "ଦୟାକରି ଓଡ଼ିଆରେ ଉତ୍ତର ଦିଅନ୍ତୁ. Respond in Odia language.",
+    "Assamese": "অনুগ্ৰহ কৰি অসমীয়াত উত্তৰ দিয়ক. Respond in Assamese language.",
+    "Nepali": "कृपया नेपालीमा जवाफ दिनुहोस्. Respond in Nepali language.",
+    "Malayalam": "ദയവായി മലയാളത്തിൽ മറുപടി നൽകുക. Respond in Malayalam language.",
+    "Kannada": "ದಯವಿಟ್ಟು ಕನ್ನಡದಲ್ಲಿ ಉತ್ತರಿಸಿ. Respond in Kannada language.",
+    "Konkani": "कृपया कोंकणीत जाप दिवची. Respond in Konkani language.",
 }
 
+# Stop words for keyword search
+STOP_WORDS = frozenset({
+    "the", "a", "an", "is", "are", "was", "were", "be", "been",
+    "do", "does", "did", "can", "could", "will", "would", "should",
+    "i", "me", "my", "we", "you", "your", "it", "its", "they",
+    "this", "that", "what", "which", "how", "when", "where", "why",
+    "from", "to", "in", "on", "at", "for", "of", "with", "and",
+    "or", "not", "no", "if", "but", "so", "as", "by", "up",
+})
+
 
 # ─────────────────────────────────────────────────────────────
-# Knowledge base loading (always available, no dependencies)
+# Knowledge base loading (cached at module level)
 # ─────────────────────────────────────────────────────────────
-@st.cache_data
+_knowledge_cache: Optional[list] = None
+
+
 def load_knowledge_base() -> list:
-    """Load the banking knowledge base from JSON file."""
+    """Load the banking knowledge base from JSON file (cached)."""
+    global _knowledge_cache
+    if _knowledge_cache is not None:
+        return _knowledge_cache
     try:
         if KNOWLEDGE_FILE.exists():
             with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                _knowledge_cache = json.load(f)
+                logger.info("Loaded knowledge base: %d entries", len(_knowledge_cache))
+                return _knowledge_cache
     except Exception as e:
-        st.warning(f"Could not load knowledge base: {e}")
-    return []
+        logger.error("Could not load knowledge base: %s", e)
+    _knowledge_cache = []
+    return _knowledge_cache
 
 
 def keyword_search(query: str, top_k: int = 3) -> list:
@@ -63,7 +95,7 @@ def keyword_search(query: str, top_k: int = 3) -> list:
         return []
 
     query_lower = query.lower().strip()
-    query_words = set(re.findall(r'\w+', query_lower))
+    query_words = set(re.findall(r'\w+', query_lower)) - STOP_WORDS
 
     scored_results = []
     for entry in knowledge:
@@ -72,199 +104,115 @@ def keyword_search(query: str, top_k: int = 3) -> list:
         entry_words = set(re.findall(r'\w+', entry_text))
 
         # Word overlap scoring
-        common_words = query_words & entry_words
-        # Filter out very common words
-        stop_words = {"the", "a", "an", "is", "are", "was", "were", "be", "been",
-                      "do", "does", "did", "can", "could", "will", "would", "should",
-                      "i", "me", "my", "we", "you", "your", "it", "its", "they",
-                      "this", "that", "what", "which", "how", "when", "where", "why",
-                      "from", "to", "in", "on", "at", "for", "of", "with", "and",
-                      "or", "not", "no", "if", "but", "so", "as", "by", "up"}
-        meaningful_common = common_words - stop_words
-
+        meaningful_common = query_words & entry_words - STOP_WORDS
         score += len(meaningful_common) * 3
 
-        # Exact phrase matching (higher weight)
-        if len(query_lower) > 3:
-            # Check if key query phrases appear in the entry
-            for phrase_len in range(min(5, len(query_words)), 1, -1):
-                words_list = list(query_words - stop_words)
-                for word in words_list:
-                    if word in entry['question'].lower():
-                        score += 2
-                    if word in entry['category'].lower():
-                        score += 1
-
-        # Category-specific boosting
-        category_keywords = {
-            "withdrawal_limits": ["withdraw", "limit", "maximum", "daily", "how much", "amount"],
-            "balance_inquiry": ["balance", "check", "enquiry", "inquiry", "how much"],
-            "mini_statement": ["statement", "mini", "transaction", "history", "recent"],
-            "pin_security": ["pin", "forgot", "change", "wrong", "block", "secure"],
-            "card_issues": ["card", "lost", "stolen", "stuck", "expired", "block"],
-            "charges_fees": ["charge", "fee", "cost", "free", "pay"],
-            "failed_transaction": ["failed", "not received", "debited", "refund", "reverse"],
-            "rbi_regulations": ["rbi", "rule", "regulation", "guideline", "policy"],
-            "safety_tips": ["safe", "safety", "secure", "fraud", "scam", "skimming"],
-            "general_help": ["service", "available", "what can", "options", "help"],
-        }
-        for cat, cat_kws in category_keywords.items():
-            if entry["category"] == cat:
-                for kw in cat_kws:
-                    if kw in query_lower:
-                        score += 2
+        # Question/category match boost
+        for word in query_words:
+            if word in entry['question'].lower():
+                score += 2
+            if word in entry['category'].lower():
+                score += 1
 
         if score > 0:
             scored_results.append((score, entry))
 
-    # Sort by score descending
     scored_results.sort(key=lambda x: x[0], reverse=True)
     return [entry for _, entry in scored_results[:top_k]]
 
 
 # ─────────────────────────────────────────────────────────────
-# Full RAG pipeline (optional, requires dependencies)
+# Google Gemini Integration
 # ─────────────────────────────────────────────────────────────
-@st.cache_resource(show_spinner="Loading AI models... This may take a minute on first run.")
-def init_rag_pipeline():
-    """
-    Initialize the RAG pipeline components.
-    Returns the retrieval chain or None if setup fails.
-    """
+_gemini_model = None
+_gemini_init_attempted = False
+
+
+def _init_gemini():
+    """Initialize Google Gemini model (lazy, one-time)."""
+    global _gemini_model, _gemini_init_attempted
+    if _gemini_init_attempted:
+        return _gemini_model
+    _gemini_init_attempted = True
+
+    api_key = os.getenv("GOOGLE_API_KEY", "")
+    if not api_key or api_key == "your_google_api_key_here":
+        logger.info("No Google API key found — using keyword search fallback")
+        return None
+
     try:
-        from langchain_community.vectorstores import FAISS
-        from langchain_huggingface import HuggingFaceEmbeddings
-        from langchain.schema import Document
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        _gemini_model = genai.GenerativeModel("gemini-2.0-flash")
+        logger.info("Google Gemini initialized successfully")
+        return _gemini_model
+    except ImportError:
+        logger.warning("google-generativeai not installed — using keyword search")
+        return None
+    except Exception as e:
+        logger.error("Gemini init failed: %s", e)
+        return None
 
-        # 1. Load knowledge base
-        knowledge_data = load_knowledge_base()
-        if not knowledge_data:
-            return None
 
-        # 2. Create documents
-        documents = []
-        for item in knowledge_data:
-            content = f"Category: {item['category']}\nQuestion: {item['question']}\nAnswer: {item['answer']}"
-            documents.append(Document(
-                page_content=content,
-                metadata={"category": item["category"], "question": item["question"]}
-            ))
+def query_gemini(question: str, context: str, language: str = "English") -> Optional[str]:
+    """Query Google Gemini with context from knowledge base."""
+    model = _init_gemini()
+    if model is None:
+        return None
 
-        # 3. Initialize embeddings (runs locally, no API key needed)
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            model_kwargs={"device": "cpu"},
-            encode_kwargs={"normalize_embeddings": True},
-        )
+    lang_instruction = LANGUAGE_INSTRUCTIONS.get(language, LANGUAGE_INSTRUCTIONS["English"])
 
-        # 4. Create or load FAISS index
-        if FAISS_INDEX_DIR.exists():
-            try:
-                vector_store = FAISS.load_local(
-                    str(FAISS_INDEX_DIR),
-                    embeddings,
-                    allow_dangerous_deserialization=True,
-                )
-            except Exception:
-                vector_store = FAISS.from_documents(documents, embeddings)
-                vector_store.save_local(str(FAISS_INDEX_DIR))
-        else:
-            vector_store = FAISS.from_documents(documents, embeddings)
-            FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
-            vector_store.save_local(str(FAISS_INDEX_DIR))
-
-        # 5. Set up Groq LLM
-        groq_api_key = os.getenv("GROQ_API_KEY", "")
-        if not groq_api_key or groq_api_key == "your_groq_api_key_here":
-            return {"vector_store": vector_store, "chain": None, "mode": "retrieval_only"}
-
-        from langchain_groq import ChatGroq
-        from langchain.chains import create_retrieval_chain
-        from langchain.chains.combine_documents import create_stuff_documents_chain
-        from langchain_core.prompts import ChatPromptTemplate
-
-        llm = ChatGroq(
-            model="llama-3.3-70b-versatile",
-            temperature=0.3,
-            api_key=groq_api_key,
-        )
-
-        # 6. Build retrieval chain
-        prompt = ChatPromptTemplate.from_template("""
-You are a helpful ATM banking assistant. Answer the user's question based on the provided context.
-Be concise, accurate, and helpful. If relevant information is in the context, use it.
+    prompt = f"""You are a helpful ATM banking assistant. Answer the user's question based on the provided context.
+Be concise (2-3 sentences), accurate, and helpful. If relevant information is in the context, use it.
 If the question is not related to banking/ATM services, politely redirect.
 
-{language_instruction}
+{lang_instruction}
 
 Context:
 {context}
 
-User Question: {input}
+User Question: {question}
 
-Helpful Answer:""")
+Helpful Answer:"""
 
-        retriever = vector_store.as_retriever(search_kwargs={"k": 3})
-        document_chain = create_stuff_documents_chain(llm, prompt)
-        retrieval_chain = create_retrieval_chain(retriever, document_chain)
-
-        return {"vector_store": vector_store, "chain": retrieval_chain, "mode": "full_rag"}
-
-    except ImportError as e:
-        # Missing dependencies — fall back to keyword search
-        return None
+    try:
+        response = model.generate_content(prompt)
+        answer = response.text.strip()
+        if answer:
+            logger.info("Gemini response generated for: %s", question[:50])
+            return answer
     except Exception as e:
-        # Any other error — fall back to keyword search
-        return None
+        logger.warning("Gemini query failed: %s", e)
+
+    return None
 
 
 def query_rag(question: str, language: str = "English") -> str:
     """
     Query the RAG pipeline with a user question.
-    Falls back gracefully: Full RAG → FAISS retrieval → Keyword search → Static response.
+    Falls back gracefully: Gemini + context → Keyword search → Static fallback.
     """
-    language_instruction = LANGUAGE_INSTRUCTIONS.get(language, LANGUAGE_INSTRUCTIONS["English"])
-
-    # ── Attempt 1: Full RAG pipeline ──
-    rag = init_rag_pipeline()
-
-    if rag is not None:
-        try:
-            if rag["mode"] == "full_rag" and rag["chain"] is not None:
-                response = rag["chain"].invoke({
-                    "input": question,
-                    "language_instruction": language_instruction,
-                })
-                answer = response.get("answer", "")
-                if answer:
-                    return answer
-
-            # Retrieval-only mode (FAISS without LLM)
-            if rag.get("vector_store"):
-                docs = rag["vector_store"].similarity_search(question, k=3)
-                if docs:
-                    best_doc = docs[0].page_content
-                    if "Answer:" in best_doc:
-                        return best_doc.split("Answer:")[-1].strip()
-                    return best_doc
-
-        except Exception:
-            pass  # Fall through to keyword search
-
-    # ── Attempt 2: Keyword-based search (no ML needed) ──
+    # Step 1: Get relevant context via keyword search
     results = keyword_search(question)
+
+    # Step 2: Try Gemini with context
     if results:
-        # Return the best matching answer
-        best = results[0]
-        answer = best["answer"]
+        context = "\n\n".join(
+            f"Q: {r['question']}\nA: {r['answer']}" for r in results[:3]
+        )
+        gemini_answer = query_gemini(question, context, language)
+        if gemini_answer:
+            return gemini_answer
 
-        # If multiple good matches, combine top 2
-        if len(results) >= 2:
-            answer = f"{best['answer']}"
+        # Fallback: return best keyword match
+        return results[0]["answer"]
 
-        return answer
+    # Step 3: Try Gemini without context (general banking question)
+    gemini_answer = query_gemini(question, "No specific context available.", language)
+    if gemini_answer:
+        return gemini_answer
 
-    # ── Attempt 3: Static fallback ──
+    # Step 4: Static fallback
     return _fallback_response(question, language)
 
 

@@ -1,22 +1,25 @@
 """
 Transaction Engine — ATM transaction simulation with mock banking data.
+Framework-agnostic: accepts and returns plain dicts.
 """
 
-import streamlit as st
 from datetime import datetime, timedelta
+from typing import Optional
 import random
+import logging
 
+logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────
 # Constants
 # ─────────────────────────────────────────────────────────────
-DAILY_WITHDRAWAL_LIMIT = 20000
-PER_TRANSACTION_LIMIT = 10000
-MIN_WITHDRAWAL = 100
-INITIAL_BALANCE = 25000
+DAILY_WITHDRAWAL_LIMIT: int = 20000
+PER_TRANSACTION_LIMIT: int = 10000
+MIN_WITHDRAWAL: int = 100
+INITIAL_BALANCE: int = 25000
 
 
-def _generate_mock_history() -> list:
+def generate_mock_history() -> list:
     """Generate mock transaction history for the account."""
     tx_types = [
         ("Credit", "Salary Credited", 2000, 50000),
@@ -28,7 +31,7 @@ def _generate_mock_history() -> list:
         ("Debit", "Fund Transfer", 500, 25000),
     ]
 
-    history = []
+    history: list = []
     running_balance = INITIAL_BALANCE
     base_date = datetime.now()
 
@@ -55,115 +58,56 @@ def _generate_mock_history() -> list:
     return list(reversed(history))
 
 
-def init_transaction_state():
-    """Initialize transaction-related session state."""
-    if "account" not in st.session_state:
-        st.session_state.account = {
-            "card_number": "XXXX-XXXX-XXXX-1234",
-            "account_type": "Savings",
-            "holder_name": "Demo User",
-            "balance": INITIAL_BALANCE,
-            "daily_withdrawn": 0,
-            "last_withdrawal_date": None,
-            "transaction_history": _generate_mock_history(),
-        }
-
-
-def _reset_daily_limit():
-    """Reset daily withdrawal counter if it's a new day."""
-    today = datetime.now().date()
-    last_date = st.session_state.account.get("last_withdrawal_date")
-    if last_date != today:
-        st.session_state.account["daily_withdrawn"] = 0
-        st.session_state.account["last_withdrawal_date"] = today
-
-
-def check_balance() -> dict:
+def check_balance(account: dict) -> dict:
     """
     Check account balance.
-    Returns: {"success": True, "balance": int}
+    Returns: {"success": True, "balance": int, ...}
     """
     return {
         "success": True,
-        "balance": st.session_state.account["balance"],
-        "account_type": st.session_state.account["account_type"],
-        "card_number": st.session_state.account["card_number"],
+        "balance": account["balance"],
+        "account_type": account.get("account_type", "Savings"),
+        "card_number": account["card_number"],
     }
 
 
-def withdraw(amount: int) -> dict:
+def withdraw(account: dict, amount: int) -> dict:
     """
     Process a withdrawal request.
-    Returns: {
-        "success": bool,
-        "message": str,        # success/error message key
-        "amount": int,
-        "balance": int,
-        "receipt": dict | None
-    }
+    Mutates the account dict on success.
+    Returns result dict with success status.
     """
-    _reset_daily_limit()
-    account = st.session_state.account
+    today = datetime.now().date()
+    if account.get("last_withdrawal_date") != str(today):
+        account["daily_withdrawn"] = 0
 
     # Validate amount is positive
     if amount <= 0:
-        return {
-            "success": False,
-            "message": "invalid_amount",
-            "amount": amount,
-            "balance": account["balance"],
-            "receipt": None,
-        }
+        return _error(account, "invalid_amount", amount)
 
     # Validate multiples of 100
     if amount % MIN_WITHDRAWAL != 0:
-        return {
-            "success": False,
-            "message": "invalid_amount",
-            "amount": amount,
-            "balance": account["balance"],
-            "receipt": None,
-        }
+        return _error(account, "invalid_amount", amount)
 
     # Check per-transaction limit
     if amount > PER_TRANSACTION_LIMIT:
-        return {
-            "success": False,
-            "message": "exceed_limit",
-            "amount": amount,
-            "balance": account["balance"],
-            "receipt": None,
-            "limit": PER_TRANSACTION_LIMIT,
-        }
+        return _error(account, "exceed_limit", amount, limit=PER_TRANSACTION_LIMIT)
 
     # Check daily limit
     if account["daily_withdrawn"] + amount > DAILY_WITHDRAWAL_LIMIT:
         remaining = DAILY_WITHDRAWAL_LIMIT - account["daily_withdrawn"]
-        return {
-            "success": False,
-            "message": "exceed_limit",
-            "amount": amount,
-            "balance": account["balance"],
-            "receipt": None,
-            "limit": remaining,
-        }
+        return _error(account, "exceed_limit", amount, limit=remaining)
 
     # Check sufficient balance
     if amount > account["balance"]:
-        return {
-            "success": False,
-            "message": "insufficient_funds",
-            "amount": amount,
-            "balance": account["balance"],
-            "receipt": None,
-        }
+        return _error(account, "insufficient_funds", amount)
 
     # Process withdrawal
     account["balance"] -= amount
     account["daily_withdrawn"] += amount
-    account["last_withdrawal_date"] = datetime.now().date()
+    account["last_withdrawal_date"] = str(today)
 
-    # Add to transaction history
+    ref = f"ATM{random.randint(100000, 999999)}"
     tx_record = {
         "date": datetime.now().strftime("%d-%b-%Y %H:%M"),
         "type": "Debit",
@@ -172,6 +116,7 @@ def withdraw(amount: int) -> dict:
         "balance": account["balance"],
     }
     account["transaction_history"].append(tx_record)
+    logger.info("Withdrawal processed: amount=%d, ref=%s", amount, ref)
 
     receipt = {
         "card_number": account["card_number"],
@@ -179,7 +124,7 @@ def withdraw(amount: int) -> dict:
         "transaction_type": "Cash Withdrawal",
         "amount": amount,
         "available_balance": account["balance"],
-        "reference_no": f"ATM{random.randint(100000, 999999)}",
+        "reference_no": ref,
     }
 
     return {
@@ -191,38 +136,40 @@ def withdraw(amount: int) -> dict:
     }
 
 
-def get_mini_statement() -> dict:
-    """
-    Get the last 5 transactions.
-    Returns: {"success": True, "transactions": list, "balance": int}
-    """
-    account = st.session_state.account
-    transactions = account["transaction_history"][-5:]
-
+def get_mini_statement(account: dict) -> dict:
+    """Get the last 5 transactions."""
     return {
         "success": True,
-        "transactions": transactions,
+        "transactions": account["transaction_history"][-5:],
         "balance": account["balance"],
         "card_number": account["card_number"],
     }
 
 
 def format_currency(amount: int) -> str:
-    """Format an integer amount as Indian currency string."""
-    # Indian numbering system: first group of 3, then groups of 2
-    s = str(amount)
+    """Format an integer amount as Indian currency string (₹1,25,000)."""
+    s = str(abs(int(amount)))
     if len(s) <= 3:
         return f"₹{s}"
-
     last_three = s[-3:]
     remaining = s[:-3]
-
-    # Add commas every 2 digits for the remaining part
-    groups = []
+    groups: list = []
     while len(remaining) > 2:
         groups.insert(0, remaining[-2:])
         remaining = remaining[:-2]
     if remaining:
         groups.insert(0, remaining)
-
     return f"₹{','.join(groups)},{last_three}"
+
+
+def _error(account: dict, message: str, amount: int, **kwargs) -> dict:
+    """Helper to build error response."""
+    result = {
+        "success": False,
+        "message": message,
+        "amount": amount,
+        "balance": account["balance"],
+        "receipt": None,
+    }
+    result.update(kwargs)
+    return result
